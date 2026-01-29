@@ -109,7 +109,7 @@ def _calculate_action_by_integrating(x, vx, extrema_indices, border_type):
     J_aver = np.zeros(len(extrema_indices) - 1)
     for j in range(len(extrema_indices) - 1):
         n0, n1 = extrema_indices[j], extrema_indices[j+1]
-        J_aver[j] = np.trapz(vx[n0:n1], x=x[n0:n1]) / (2*np.pi)
+        J_aver[j] = np.trapezoid(vx[n0:n1], x=x[n0:n1]) / (2*np.pi)
     return _find_values_for_mpspline(J_aver, border_type)
 
 

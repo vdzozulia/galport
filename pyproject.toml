@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "galport"
-version = "0.1"
+version = "0.1.1"
 authors = [
     {name = "Viktor Zozulia", email = "vdzozulia.astro@gmail.com"}
 ]
@@ -15,20 +15,12 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy",
     "agama",
-    "naif",
     "scipy"
 ]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["galport"]
-
-
-[tool.setuptools.package-data]
-"galport" = [
-    "../notebooks/**",
-    "../data/**",
-]
 
 [project.urls]
 Homepage = "https://github.com/vdzozulia/galport"

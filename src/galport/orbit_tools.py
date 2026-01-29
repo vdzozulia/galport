@@ -168,8 +168,8 @@ class OrbitTools():
 
         phi = self.Omega*self.t
 
-        for i in range(self.Norb):    
-            xv_i = 1.0*self.xv[i]
+        for i in range(self.Norb): 
+            xv_i = 1.*self.xv[i]
             if sidereal:
                 x0 = 1.*xv_i[:, 0]
                 y0 = 1.*xv_i[:, 1]
@@ -235,7 +235,7 @@ class OrbitTools():
 
         Returns
         -------
-        types : (M, ) numpy array 
+        types : (M, ) numpy array
             array of types (integer)
         amplitude : (M, ) numpy array, optional
             array of angles amplitude for passage or resonant orbit.
