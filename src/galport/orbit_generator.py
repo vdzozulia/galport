@@ -234,9 +234,9 @@ class OrbitGenerator():
         Norb : int, optional
             number of orbits, by default 20
         coef_ymin : float, optional
-            ymin = coef_ymin*y(vx=0, vy=0, x=0), by default 0.02
+            ymin = coef_ymin*y(H, vx=0, vy=0, x=0), by default 0.02
         coef_ymax : float, optional
-            ymax = coef_ymax*y(vx=0, vy=0, x=0), by default 0.95
+            ymax = coef_ymax*y(H, vx=0, vy=0, x=0), by default 0.95
 
         Returns
         -------

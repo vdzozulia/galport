@@ -25,3 +25,6 @@ packages = ["galport"]
 [project.urls]
 Homepage = "https://github.com/vdzozulia/galport"
 Repository = "https://github.com/vdzozulia/galport"
+Documentation = "https://galport.readthedocs.io/"
+Issues = "https://github.com/vdzozulia/galport/issues"
+
