@@ -43,8 +43,7 @@ Key Features
    :maxdepth: 2
    :caption: Contents
    
-   installation
-   quickstart
+
 
 Indices and tables
 ==================
