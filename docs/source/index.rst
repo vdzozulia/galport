@@ -39,26 +39,13 @@ Key Features
 * **Hamiltonian fitting** to recover phase-space portraits
 * **Mean-preserving spline interpolation** for accurate averaging
 
-Documentation Contents
-----------------------
-
 .. toctree::
    :maxdepth: 2
-   :caption: Getting Started
+   :caption: Contents
    
    installation
    quickstart
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Tutorials
-   
-   Tutorials <tutorials.rst>
-
-.. toctree::
-   :maxdepth: 2
-   :caption: API Reference
-   
+   tutorials <tutorials.rst>
    API reference <reference.rst>
 
 Indices and tables
