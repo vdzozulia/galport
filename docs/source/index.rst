@@ -43,7 +43,10 @@ Key Features
    :maxdepth: 2
    :caption: Contents
    
-
+   installation
+   tutuorials
+   reference
+   
 
 Indices and tables
 ==================
