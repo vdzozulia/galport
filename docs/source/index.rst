@@ -45,8 +45,6 @@ Key Features
    
    installation
    quickstart
-..   tutorials <tutorials.rst>
-..   API reference <reference.rst>
 
 Indices and tables
 ==================
