@@ -1,8 +1,8 @@
 # docs/source/conf.py
-# import os
-# import sys
+import os
+import sys
 
-# sys.path.insert(0, os.path.abspath('../../src'))
+sys.path.insert(0, os.path.abspath('../../src'))
 
 # -- Project information
 
@@ -14,11 +14,16 @@ version = '0.1.0'
 
 # -- General configuration
 
-extensions = [
+xtensions = [
+    'sphinx.ext.duration',
+    'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
-    'nbsphinx'
+    'sphinx.ext.napoleon',           # Для NumPy-style docstrings
+    'nbsphinx',                        # Для Jupyter notebooks
+    'sphinx_copybutton',               # Для копирования кода
 ]
 
 intersphinx_mapping = {
