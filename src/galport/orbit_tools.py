@@ -168,7 +168,7 @@ class OrbitTools():
 
         phi = self.Omega*self.t
 
-        for i in range(self.Norb): 
+        for i in range(self.Norb):
             xv_i = 1.*self.xv[i]
             if sidereal:
                 x0 = 1.*xv_i[:, 0]

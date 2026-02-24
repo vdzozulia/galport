@@ -131,7 +131,8 @@ class HFitting():
 
         OG = OrbitGenerator(
             potential=self.potential, Omega=self.Omega)
-        self.xv0 = OG(H=H, Norb=Norb, otype=otype)
+        Tcirc = self.axisym_potential.Tcirc(self.H)*10
+        self.xv0 = OG(H=H, Norb=Norb, Tint=Tcirc, otype=otype)
         self.delta_orb = OG.delta
         return self.xv0, self.delta_orb
 
@@ -170,7 +171,7 @@ class HFitting():
                         Tint=self.Tint, Nint=self.Nint, reverse=self.reverse)
         
         phase_coord_0 = ST.calculate_actions(dJdt=True, spline_expansion=10)
-        phase_coord_0 = phase_coord_0[:, len(phase_coord_0[0])//2:]
+        # phase_coord_0 = phase_coord_0[:, len(phase_coord_0[0])//2:]
         J = phase_coord_0[:, :, 0:3]
         dotJ = phase_coord_0[:, :, 3:6]
         theta = phase_coord_0[:, :, 6:9]
@@ -208,7 +209,7 @@ class HFitting():
         Parameters
         ----------
         H : float
-            list of Jacobian
+            Jacobi integral
         Htype : str
             'bar_2d' : flat orbits on xy plane
             'vertical_bar' : orbits along major axis of a bar
@@ -250,7 +251,7 @@ class HFitting():
         deg = kwargs.get('deg', defaults['deg'])
         weight_dthetadt = kwargs.get('weight_dthetadt', defaults['weight_dthetadt'])
 
-        # Not calculate if we have already found orbits and phase
+        # Not calculate if we have already found orbits
         if not all([self.Htype == Htype, self.Norb == Norb, self.H == H]):
             self.Htype = Htype
             self.Norb = Norb
@@ -258,8 +259,8 @@ class HFitting():
             # Find initial condition for orbit 
             self._calc_orbits(H, Norb=Norb, Htype=Htype)
             # Integrate the good orbits and calculate phase coordinates
-            self.phasecoord = self._calc_phasecoord(Tint=Tint, Nint=Nint)
 
+        self.phasecoord = self._calc_phasecoord(Tint=Tint, Nint=Nint)
         # Highlight good orbits
         mask_good = self.delta_orb < max_delta
         Norb_good = np.count_nonzero(mask_good)
