@@ -44,8 +44,8 @@ Key Features
    :caption: Contents
    
    installation
-   tutuorials
-   reference
+   Tutorials <tutorials.rst>
+   API reference <reference.rst>
    
 
 Indices and tables
