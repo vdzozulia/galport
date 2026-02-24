@@ -53,61 +53,13 @@ Documentation Contents
    :maxdepth: 2
    :caption: Tutorials
    
-   tutorials/index
-   tutorials/tutorial_actions
-   tutorials/tutorial_classify
-   tutorials/tutorial_generate
-   tutorials/tutorial_fit
+   Tutorials <tutorials.rst>
 
 .. toctree::
    :maxdepth: 2
    :caption: API Reference
    
-   api/index
-   api/averager
-   api/orbit_tools
-   api/orbit_generator
-   api/hamiltonian
-   api/hamiltonian_fitting
-   api/orbit_classifier
-   api/mpspline
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Examples
-   
-   examples/index
-   examples/example_bar_potential
-   examples/example_vertical
-   examples/example_resonances
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Theory
-   
-   theory/index
-   theory/action_angle
-   theory/averaging
-   theory/resonances
-   theory/hamiltonian_models
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Project Info
-   
-   contributing
-   changelog
-   license
-   citation
-
-Quick Links
------------
-
-* :doc:`installation`
-* :doc:`quickstart`
-* :doc:`contributing`
-* :doc:`changelog`
-* :doc:`citation`
+   API reference <reference.rst>
 
 Indices and tables
 ==================
