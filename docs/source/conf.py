@@ -21,9 +21,9 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
-    'sphinx.ext.napoleon',           # Для NumPy-style docstrings
-    'nbsphinx',                        # Для Jupyter notebooks
-    'sphinx_copybutton',               # Для копирования кода
+    'sphinx.ext.napoleon',           
+    'nbsphinx',                        
+    'sphinx_copybutton',
 ]
 
 intersphinx_mapping = {

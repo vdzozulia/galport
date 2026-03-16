@@ -5,8 +5,8 @@ Tutorials
    :maxdepth: 1
    :caption: Tutorial Notebooks
    
-   actions.ipynb
-   classify.ipynb
-   OrbitTools.ipynb
-   HFitting.ipynb
+   notebooks/actions.ipynb
+   notebooks/classify.ipynb
+   notebooks/OrbitTools.ipynb
+   notebooks/HFitting.ipynb
    

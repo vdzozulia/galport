@@ -25,3 +25,25 @@ OrbitTools Class
    :undoc-members:
    :show-inheritance:
    :special-members: __init__
+
+
+Hamiltonian Class
+----------------
+
+.. autoclass:: galport.Hamiltonian
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :special-members: __init__
+
+
+Hamiltonian fitting Class
+----------------
+
+.. autoclass:: galport.HFitting
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :special-members: __init__
+   
+
