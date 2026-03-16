@@ -45,7 +45,6 @@ Key Features
    
    installation
    Tutorials <tutorials.rst>
-   API reference <reference.rst>
    
 
 Indices and tables
