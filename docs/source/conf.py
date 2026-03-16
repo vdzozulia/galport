@@ -12,31 +12,27 @@ author = 'Zozulia Viktor'
 release = '0.1'
 version = '0.1.0'
 
-# -- General configuration
 
-xtensions = [
-    'sphinx.ext.duration',
-    'sphinx.ext.doctest',
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.napoleon',           # Для NumPy-style docstrings
-    'nbsphinx',                        # Для Jupyter notebooks
-    'sphinx_copybutton',               # Для копирования кода
-]
+# -- General configuration ---------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-intersphinx_mapping = {
-    'python': ('https://docs.python.org/3/', None),
-    'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
-}
-intersphinx_disabled_domains = ['std']
+extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon", "sphinx.ext.viewcode", "nbsphinx"]
+#nbsphinx_prompt_width = 0 # no prompts in nbsphinx
 
 templates_path = ['_templates']
+exclude_patterns = ['.ipynb_checkpoints/*']
 
-# -- Options for HTML output
+
+
+# -- Options for HTML output -------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+
+#html_theme = 'alabaster'
 
 html_theme = 'sphinx_rtd_theme'
+#html_theme = 'agogo'
+html_static_path = ['_static']
 
-# -- Options for EPUB output
-epub_show_urls = 'footnote'
+#body_max_width = 1200
+master_doc = 'index'
+
