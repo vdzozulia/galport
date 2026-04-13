@@ -1,0 +1,480 @@
+# galport Documentation
+
+## The GALactic phase-space PORTrate investigator
+
+**Package for investigating galactic dynamics in action-angle space.**
+
+[![PyPI version](https://badge.fury.io/py/galport.svg)](https://badge.fury.io/py/galport)
+[![Documentation Status](https://readthedocs.org/projects/galport/badge/?version=latest)](https://galport.readthedocs.io/en/latest/?badge=latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+---
+
+## Overview
+
+`galport` is a Python package designed for studying galactic dynamics using action-angle variables. It provides tools for calculating averaged action-angle variables, classifying orbits, generating orbit families, and fitting Hamiltonian models to galactic potentials.
+
+The package is built on top of `agama` (Action-based Galaxy Modeling Architecture) and integrates seamlessly with its potential models and action finders.
+
+### Key Features
+
+- **Averaged action-angle calculations** from orbital trajectories
+- **Orbit classification** based on resonant angle behavior
+- **Orbit generation** for various bar-related orbit families (x1, banana, ultraharmonic, etc.)
+- **Hamiltonian fitting** to recover phase-space portraits
+- **Mean-preserving spline interpolation** for accurate averaging
+
+---
+
+## Installation
+
+### Prerequisites
+
+`galport` requires:
+- Python 3.8+
+- `numpy`
+- `scipy`
+- `agama` (see [Agama installation](https://github.com/GalacticDynamics-Oxford/Agama))
+
+### Install via pip
+
+```bash
+pip install galport
+```
+
+### Install from source
+
+```bash
+git clone https://github.com/vzozulia/galport.git
+cd galport
+pip install -e .
+```
+
+---
+
+## Package Structure
+
+`galport` is organized into two main parts:
+
+### Part 1: Action-Angle Analysis Tools
+
+| Module/Class | Description |
+|--------------|-------------|
+| `averager` | Core module for calculating averaged values and action-angle variables |
+| `OrbitClassifier` | Classifies orbits based on resonant angle behavior |
+| `OrbitTools` | Unified interface for orbit integration, action calculation, and classification |
+
+### Part 2: Hamiltonian Modeling & Orbit Generation
+
+| Module/Class | Description |
+|--------------|-------------|
+| `Hamiltonian` | Implements various 1D Hamiltonian models (pendulum, Taylor series, sqrt-Taylor) |
+| `OrbitGenerator` | Finds initial conditions for different orbit families (x1, banana, bar_2d, etc.) |
+| `HFitting` | Fits Hamiltonian parameters to orbital data |
+| `Torus2D` | *(In development)* For 2D potential investigation |
+
+---
+
+## Quick Start Guide
+
+### 1. Calculate Averaged Action-Angle Variables
+
+```python
+import agama
+import galport
+import numpy as np
+
+# Set up a potential
+pot = agama.Potential(type='spheroid', density=1.0, axisRatioY=0.8, axisRatioZ=0.5)
+
+# Create OrbitTools instance
+ot = galport.OrbitTools(
+    xv0=[10.0, 0.0, 0.0, 0.0, 0.1, 0.0],  # Initial conditions
+    potential=pot,
+    Tint=100.0,
+    Nint=2000
+)
+
+# Calculate averaged actions
+data = ot.calculate_actions(dJdt=True)
+# Returns array with columns: JR, Jz, Lz, dJR/dt, dJz/dt, dLz/dt, θR, θz, θφ, κ, ωz, Ω
+```
+
+### 2. Classify Orbits
+
+```python
+# Classify orbits at t=0 for ILR family
+types = ot.classify_orbits(t_out=0.0, family='ILR')
+# Returns: 1=increasing angle, 2=decreasing, 3=resonance around 0, 4=resonance around π, etc.
+```
+
+### 3. Generate Orbit Families
+
+```python
+# Initialize orbit generator
+og = galport.OrbitGenerator(potential=pot, Omega=0.05)
+
+# Generate x1 orbits (bar-aligned orbits in xy-plane)
+xv, delta = og(H=-2.0, otype='x1', Norb=10)
+
+# Generate banana orbits (vertical resonant orbits)
+xv_ban, delta_ban = og(H=-2.0, otype='ban_up', Norb=5)
+```
+
+### 4. Fit a Hamiltonian
+
+```python
+# Initialize fitting class
+hf = galport.HFitting(
+    potential=pot,
+    axisym_potential=pot_axisym,  # Axisymmetric approximation
+    Omega=0.05
+)
+
+# Fit a Hamiltonian for buckling-type orbits
+H_model = hf.fit(
+    H=-2.0,
+    Htype='buckling',
+    Norb=15,
+    Tint=100.0
+)
+
+# Use the fitted Hamiltonian
+dJdt = H_model.dJdt(J=0.1, theta=np.pi/4)
+dthetadt = H_model.dthetadt(J=0.1, theta=np.pi/4)
+```
+
+---
+
+## Detailed Module Documentation
+
+### Module: `averager`
+
+Core functionality for averaging time series data and calculating action-angle variables.
+
+#### `averager.value(t, x, **kwargs)`
+
+Average a time series between extrema points.
+
+**Parameters:**
+- `t` : (N,) array — time values
+- `x` : (N,) array — values to average
+- `average_type` : str, optional — 'extrema', 'mean', or 'onlymax'
+- `border_type` : str, optional — 'apocenters', 'nbody', or 'secular'
+- `minmax` : bool — return minima and maxima values
+- `frequency` : bool — calculate frequency
+- `angle` : bool — calculate angle
+- `spline_expansion` : int — factor to increase resolution for extrema finding
+- `apply_filter` : bool — apply frequency/value ratio filters
+
+**Returns:** Averaged values, optionally with min/max, frequency, and angle.
+
+#### `averager.action(t, xv, act=None, **kwargs)`
+
+Calculate averaged action-angle variables from orbital trajectories.
+
+**Parameters:**
+- `t` : (N,) array — time values
+- `xv` : (N,6) array — phase-space coordinates [x,y,z,vx,vy,vz]
+- `act` : (N,3) array, optional — instantaneous actions from Agama
+- `dJdt` : bool — calculate time derivatives of actions
+- `secular` : bool — calculate secular (long-term) variations
+- `secular_extrema` : bool — include secular maxima/minima
+- `secular_act_freq` : bool — calculate oscillation frequencies of actions
+- `secular_bar_var` : bool — calculate bar-specific variables (Jv, Ωpr, dLz/dΩpr)
+- `border_type` : str — boundary treatment ('apocenters', 'nbody')
+- `JR_ilr` : bool — include negative Lz contribution to JR for ILR
+- `positive_omega` : bool — enforce positive angular frequencies
+- `apply_apo_filter` : bool — filter spurious apocenters
+- `spline_expansion` : int — spline resolution factor
+
+**Returns:** (N, M) array with columns depending on selected options.
+
+---
+
+### Class: `OrbitTools`
+
+Unified interface for orbit integration, action calculation, and classification.
+
+#### Initialization
+
+```python
+OrbitTools(
+    xv0=None,                 # Initial conditions (N,6)
+    potential=None,           # Agama potential
+    axisym_potential=None,    # Axisymmetric potential for action finding
+    Omega=0.0,                # Pattern speed
+    Tint=100.0,               # Integration time
+    Nint=2000,                # Number of integration points
+    reverse=False,            # Integrate in both directions
+    setunits=None,            # [mass, length, velocity] units
+    t=None,                   # Pre-computed time array
+    xv=None,                  # Pre-computed trajectory
+    act=None                  # Pre-computed actions
+)
+```
+
+#### Methods
+
+| Method | Description |
+|--------|-------------|
+| `calculate_actions()` | Compute averaged action-angle variables |
+| `classify_orbits()` | Classify orbits by resonant behavior |
+| `naif_frequency()` | Calculate frequencies using NAIF package |
+
+---
+
+### Class: `OrbitGenerator`
+
+Generate initial conditions for various orbit families in barred potentials.
+
+#### Supported Orbit Types
+
+| Type | Description |
+|------|-------------|
+| `'x1'` | x1 bar orbits (aligned with bar major axis in xy-plane) |
+| `'x1v'` | Vertical x1 family with varying z-amplitude |
+| `'ban_up'` | Banana orbits pointing upward |
+| `'ban_down'` | Banana orbits pointing downward |
+| `'bar_2d'` | Sample of bar and near-bar orbits in xy-plane |
+| `'uha'` or `'4:1'` | Ultraharmonic resonant orbits |
+| `'cor'` | Corotation resonant orbits |
+
+#### Example
+
+```python
+og = OrbitGenerator(potential=pot, Omega=0.05)
+
+# Generate x1 orbits at specific Jacobi integral
+xv, delta = og(H=-2.0, otype='x1', Norb=20, Tint=100.0)
+
+# Generate vertical x1 family
+xv, delta = og(H=-2.0, otype='x1v', Norb=15, onlyposz=True)
+```
+
+---
+
+### Class: `Hamiltonian`
+
+Implements 1D Hamiltonian models for phase-space analysis.
+
+#### Hamiltonian Types
+
+| Type | Description |
+|------|-------------|
+| `'pendulum'` | Simple pendulum: H = a(J-J₀)² + b cos(θ) |
+| `'taylor'` | Taylor series in J: H = Σ hᵢ(θ) (J-J₀)ⁱ |
+| `'sqrt_taylor'` | Taylor series in √J: H = Σ hᵢ(θ) (√J)ⁱ |
+| `'axisym_res'` | 2D axisymmetric resonant: H(JR,Jz,θz-θR) |
+| `'my_fun'` | User-defined functions |
+
+#### Methods
+
+| Method | Description |
+|--------|-------------|
+| `hamiltonian(J, theta, t=None)` | Evaluate H |
+| `dJdt(J, theta, t=None)` | Compute dJ/dt = -∂H/∂θ |
+| `dthetadt(J, theta, t=None)` | Compute dθ/dt = ∂H/∂J |
+| `derivative(J, theta, t=None)` | Return both derivatives |
+| `integrate(J0, theta0, ...)` | Integrate equations of motion |
+| `jacobian(J, theta, ...)` | Compute second derivatives |
+| `fix_points(J_range, ...)` | Find fixed points of the Hamiltonian |
+| `find_J(H, theta, ...)` | Find J for given H and θ |
+| `find_theta(H, J, ...)` | Find θ for given H and J |
+
+---
+
+### Class: `HFitting`
+
+Fit Hamiltonian parameters to orbital data.
+
+#### Supported Fitting Types
+
+| Type | Description | Default Parameters |
+|------|-------------|-------------------|
+| `'bar_2d'` | Flat bar orbits | n=[0,1,2,3], deg=8, weight_dthetadt=10 |
+| `'vertical_bar'` | Orbits along bar major axis | n=[0,2,4,-2,-4], deg=4, weight_dthetadt=0.5 |
+| `'buckling'` | Asymmetric vertical orbits | n=[0,1,2,3,-1,-2,-3], deg=4, weight_dthetadt=0.5 |
+
+#### Example
+
+```python
+hf = HFitting(
+    potential=pot,
+    axisym_potential=pot_axisym,
+    Omega=0.05
+)
+
+hamiltonian = hf.fit(
+    H=-2.0,
+    Htype='buckling',
+    Norb=20,
+    Tint=150.0,
+    Nint=20000,
+    max_delta=1.0  # Maximum allowed orbit discrepancy
+)
+
+# Access fitted coefficients
+print(hf.coef)
+print(hf.delta)  # Final residual
+```
+
+---
+
+### Class: `OrbitClassifier`
+
+Classify orbits based on resonant angle behavior.
+
+#### Classification Types
+
+| Type | Description |
+|------|-------------|
+| 0 | Not classified |
+| 1 | Monotonically increasing angle |
+| 2 | Monotonically decreasing angle |
+| 3 | Resonance around 0 |
+| 4 | Resonance around π |
+| 5 | Passage through 0 (ω>0 → ω<0) |
+| 6 | Passage through π (ω>0 → ω<0) |
+| 7 | Passage through 0 (ω<0 → ω>0) |
+| 8 | Passage through π (ω<0 → ω>0) |
+
+#### Families
+
+| Family | Resonance Angle |
+|--------|-----------------|
+| `'ILR'` | θres = 2(θφ - θp) - θR |
+| `'corotation'` | θres = θφ - θp + π/2 |
+| `'ultraharmonic'` | θres = 4(θφ - θp) - θR |
+| `'vILR'` | θres = θz - θR |
+
+#### Example
+
+```python
+oc = OrbitClassifier(t, angles, theta_p=theta_bar)
+types, amplitude, times = oc(
+    t_out=[0.0, 50.0, 100.0],
+    family='ILR',
+    time_around_res=True,
+    amplitude_res=True
+)
+```
+
+---
+
+## Advanced Usage
+
+### Working with Multiple Orbits
+
+```python
+# Generate 10 orbits
+xv0, delta = og(H=-2.0, otype='x1v', Norb=10)
+
+# Process all orbits together
+ot = OrbitTools(
+    xv0=xv0,
+    potential=pot,
+    axisym_potential=pot_axisym,
+    Omega=0.05,
+    Tint=100.0,
+    reverse=True  # Integrate forward and backward
+)
+
+# Calculate actions for all orbits
+data = ot.calculate_actions(dJdt=True)
+# data.shape = (10, Nint, 12)
+
+# Classify all orbits at t=0
+types = ot.classify_orbits(t_out=0.0, family='vILR')
+```
+
+### Custom Hamiltonian
+
+```python
+def my_hamiltonian(J, theta, A=1.0, B=0.5):
+    return A * J**2 + B * np.cos(2*theta)
+
+def my_dJdt(J, theta, A=1.0, B=0.5):
+    return 2 * B * np.sin(2*theta)
+
+def my_dthetadt(J, theta, A=1.0, B=0.5):
+    return 2 * A * J
+
+H_custom = Hamiltonian(
+    Htype='my_fun',
+    ham=my_hamiltonian,
+    dJdt=my_dJdt,
+    dthetadt=my_dthetadt,
+    A=1.0,
+    B=0.5
+)
+```
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Setup
+
+```bash
+git clone https://github.com/vzozulia/galport.git
+cd galport
+pip install -e ".[dev]"
+pytest tests/
+```
+
+### Reporting Issues
+
+Please report bugs and feature requests on the [GitHub Issues page](https://github.com/vzozulia/galport/issues).
+
+---
+
+## Citation
+
+If you use `galport` in your research, please cite:
+
+```
+@software{galport2024,
+  author = {Zozulia, Viktor},
+  title = {galport: The GALactic phase-space PORTrate investigator},
+  year = {2024},
+  url = {https://github.com/vzozulia/galport}
+}
+```
+
+For the mean-preserving spline algorithm:
+```
+@article{RuizArias2022,
+  title = {Mean-preserving interpolation with splines for solar radiation modeling},
+  author = {Ruiz-Arias, J.A.},
+  journal = {Solar Energy},
+  volume = {248},
+  pages = {121--127},
+  year = {2022},
+  doi = {10.1016/j.solener.2022.10.038}
+}
+```
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+- The `agama` team for their excellent galaxy modeling framework
+- José A. Ruiz-Arias for the mean-preserving spline algorithm
+- The stellar dynamics community for theoretical foundations
+
+---
+
+## Contact
+
+**Author:** Viktor Zozulia  
+**Email:** vdzozulia.astro@gmail.com  
+**GitHub:** [@vzozulia](https://github.com/vzozulia)
