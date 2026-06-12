@@ -12,7 +12,7 @@ project = 'galport'
 author = 'Zozulia Viktor'
 
 release = '0.1'
-version = '0.1.0'
+version = '0.1.3'
 
 # -- General configuration
 

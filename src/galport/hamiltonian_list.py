@@ -122,7 +122,7 @@ def dJdt_taylor(J, theta, n=None, coef=None, J0=0.0):
 
     N = len(J)
     deg = np.shape(coef)[1]
-    degrees = np.arange(1, deg+1, dtype='int')
+    degrees = np.arange(0, deg, dtype='int')
     p = (J - J0)
 
     p_degrees_matrix = np.power.outer(p, degrees)
@@ -156,7 +156,7 @@ def dthetadt_taylor(J, theta, n=None, coef=None, J0=0.0):
         what coefficient necessary calculate
         negative numbers correspond h^s_i*sin()
         0 - h_0, i - h^c_i, -i - h^s_i
-    coef : (M, degree + 1) numpy 2D array 
+    coef : (M, degree + 1) numpy 2D array
         set of coefficient in order of n
         [[coef h_0], [coef h_1], ...]
     J0 : float
@@ -173,9 +173,10 @@ def dthetadt_taylor(J, theta, n=None, coef=None, J0=0.0):
 
     N = len(J)
     deg = np.shape(coef)[1]
-    degrees = np.arange(1, deg+1, dtype='int')
+    degrees = np.arange(0, deg, dtype='int')
     p = (J - J0)
     der_p_degrees_matrix = np.power.outer(p, degrees-1)*degrees
+    der_p_degrees_matrix[:, 0] = 0.0
 
     dthetadt = np.zeros(N)
 

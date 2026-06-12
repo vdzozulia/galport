@@ -82,6 +82,57 @@ def _create_splines(t, xv, act, spline_expansion):
         JR_spline, Jz_spline, Lz_spline
 
 
+def _create_splines_sph(t, xv, spline_expansion):
+    """Create high-resolution spline interpolations."""
+    x = xv[:, 0]
+    y = xv[:, 1]
+    z = xv[:, 2]
+    vx = xv[:, 3]
+    vy = xv[:, 4]
+    vz = xv[:, 5]
+    r = np.linalg.norm(xv[:, 0:3], axis=1) 
+    vr = (x*vx + y*vy + z*vz) / r
+
+    Lx =  (y*vz - z*vy)
+    Ly = -(x*vz - z*vx)
+    Lz =  (x*vy - y*vx)
+    L = np.sqrt(Lx**2 + Ly**2 + Lz**2) 
+
+    # Longitude of the ascrnding node
+    Lxy = np.sqrt(Lx**2 + Ly**2)
+    sin_dphi = (-Ly[:-1]*Lx[1:] + Ly[1:]*Lx[:-1]) / Lxy[:-1] / Lxy[1:]
+    cos_dphi = (Lx[:-1]*Lx[1:] + Ly[1:]*Ly[:-1]) / Lxy[:-1] / Lxy[1:]
+
+    dphi = np.arctan2(sin_dphi, cos_dphi)
+    phi = np.zeros(len(t))
+    phi[0] = np.arctan2(Lx[0], -Ly[0])
+    phi[1:] = np.cumsum(dphi) + phi[0]
+
+    # Argument of pericentre
+
+    node_dot_x = np.sqrt((-Ly*y - Lx*x)**2 + (Ly*z)**2 + (Lx*z)**2)*np.sign(Lz)*np.sign(z)
+
+    sin_psi = node_dot_x / r / Lxy
+    cos_psi = (-Ly*x + Lx*y) / r / Lxy
+    psi_ = np.arctan2(sin_psi, cos_psi)
+    dpsi = psi_[1:] - psi_[:-1]
+    dpsi[dpsi > np.pi] = dpsi[dpsi > np.pi] - 2*np.pi
+    dpsi[dpsi < -np.pi] = dpsi[dpsi < -np.pi] + 2*np.pi
+    psi = np.copy(psi_)
+    psi[1:] = np.cumsum(dpsi) + psi[0]
+
+    t_spline = np.linspace(t[0], t[-1], len(t) * spline_expansion)
+    r_spline = CubicSpline(t, r)(t_spline)
+    vr_spline = CubicSpline(t, vr)(t_spline)
+    Lz_spline = CubicSpline(t, Lz)(t_spline)
+    L_spline = CubicSpline(t, L)(t_spline)
+    phi_spline = CubicSpline(t, phi)(t_spline)
+    psi_spline = CubicSpline(t, psi)(t_spline)
+
+        
+    return t_spline, r_spline, vr_spline, phi_spline, psi_spline, L_spline, Lz_spline
+        
+
 def _find_tedges_for_mpspline(t, t_extrema, border_type='apocenters'):
     """Find t edges as variables for mean-preserving spline """
     n_extrema = len(t_extrema)
@@ -351,6 +402,31 @@ def _calculate_frequency_and_angle(t, extrema_indices, t_out, border_type,
             border_type=border_type)(t_out)
 
     return frequency*nanmask
+
+
+def _calculate_averaged_aa_variables_sph(
+        t: np.ndarray,
+        xv: np.ndarray,
+        border_type: str = 'apocenters',
+        act: Optional[np.ndarray] = None,
+        dJdt: bool = True,
+        apply_apo_filter: bool = True,
+        freq_ratio_lim: float = 1.4,
+        value_ratio_lim: float = 0.1,
+        spline_expansion: int = 100
+):
+    # Create high-resolution splines
+    t_spline, r_spline, vr_spline, phi_spline, psi_spline,\
+          L_spline, Lz_spline = _create_splines_sph(t, xv, spline_expansion)
+
+    
+    # Find extrema indexes
+    n_apo_spline = find_peaks_with_limitations(
+        t_spline, r_spline, apply_filter=apply_apo_filter,
+        freq_ratio_lim=freq_ratio_lim, value_ratio_lim=value_ratio_lim)[0]
+    
+    return np.column_stack((r_spline, L_spline, Lz_spline,
+                            phi_spline, psi_spline, vr_spline))
 
 
 def _calculate_averaged_aa_variables(
@@ -665,6 +741,33 @@ def value(
     freq_x = (freq_x_min + freq_x_max) / 2.
     return np.column_stack((x_all, freq_x*nanmask))
 
+
+def action_sph(
+    t: np.ndarray,
+    xv: np.ndarray,
+    dJdt: bool = False,
+    border_type: str = 'apocenters',
+    apply_apo_filter: bool = True,
+    freq_ratio_lim: float = 1.4,
+    value_ratio_lim: float = 0.1,
+    spline_expansion: int = 100
+):
+    
+    if np.all(np.isfinite(xv)):
+        result = _calculate_averaged_aa_variables_sph(
+            t, xv,
+            border_type=border_type,
+            dJdt=dJdt,
+            apply_apo_filter=apply_apo_filter,
+            freq_ratio_lim=freq_ratio_lim,
+            value_ratio_lim=value_ratio_lim,
+            spline_expansion=spline_expansion)
+    else:
+        result = np.empty((len(t), 9 + dJdt*3))
+    
+    return result
+
+    
 
 def action(
     t: np.ndarray,
