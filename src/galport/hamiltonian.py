@@ -435,9 +435,9 @@ class Hamiltonian():
         Parameters
         ----------
         J_range : list, optional
-            range of actions, by default [0, 0.5]
+            range of actions, by default [0.001, 0.5]
         Nstart : int, optional
-            number of initial random points, by default 100
+            number of initial points on the grid, by default 100
         t : float, optional
             time, by default None
         tol : float, optional
@@ -447,6 +447,9 @@ class Hamiltonian():
         ------
         fix_point: dict
             J, theta, type(stable, unstable), H, librating time
+
+        The fixed points are found on the linear grid by angle and
+        logarithmic grid by action.
         """
         n_side = int(np.sqrt(Nstart))
         J_grid = np.logspace(np.log10(J_range[0]), np.log10(J_range[1]), n_side)
