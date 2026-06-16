@@ -9,11 +9,9 @@ import galport.averager as averager
 from .orbit_classifier import OrbitClassifier
 from typing import Optional, Union
 
-try:
-    import naif
-except ImportError:
-    print('Do not use naif')
-
+import multiprocessing as mp
+import platform
+import warnings
 
 class OrbitTools():
     """
@@ -137,6 +135,47 @@ class OrbitTools():
             
         return
 
+    @staticmethod
+    def _worker_action(args):
+        """
+        Static worker function for computing actions of a single orbit.
+        Separated from the class instance to prevent duplicating the large 
+        shared memory arrays (xv and act) in child processes on Linux.
+        """
+        (i, t, xv_i, act_i, Omega, sidereal, dJdt, secular, secular_extrema, 
+         secular_act_freq, secular_bar_var, border_type, JR_ilr, positive_omega, 
+         apply_apo_filter, freq_ratio_lim, value_ratio_lim, spline_expansion) = args
+
+        if sidereal:
+            phi = Omega * t
+            x0 = 1. * xv_i[:, 0]
+            y0 = 1. * xv_i[:, 1]
+            # Create a local copy to prevent triggering Copy-on-Write 
+            # for the entire parent array when modifying this specific orbit
+            xv_i = np.copy(xv_i)
+            xv_i[:, 0] = x0 * np.cos(phi) - y0 * np.sin(phi)
+            xv_i[:, 1] = x0 * np.sin(phi) + y0 * np.cos(phi)
+
+        # Call the core averaging library
+        data = averager.action(
+            t=t,
+            xv=xv_i,
+            act=act_i,
+            dJdt=dJdt,
+            secular=secular,
+            secular_extrema=secular_extrema,
+            secular_act_freq=secular_act_freq,
+            secular_bar_var=secular_bar_var,
+            border_type=border_type,
+            JR_ilr=JR_ilr,
+            positive_omega=positive_omega,
+            apply_apo_filter=apply_apo_filter,
+            freq_ratio_lim=freq_ratio_lim,
+            value_ratio_lim=value_ratio_lim,
+            spline_expansion=spline_expansion
+        )
+        return i, data
+
     def calculate_actions(
             self,
             n_out: int = 1,
@@ -152,15 +191,37 @@ class OrbitTools():
             freq_ratio_lim: float = 1.4,
             value_ratio_lim: float = 0.1,
             spline_expansion: int = 10,
-            sidereal: bool = False
+            sidereal: bool = False,
+            parallel: bool = False,      # NEW: Toggle multiprocessing
+            n_jobs: Optional[int] = None # NEW: Number of processes to use
             ):
-
         """
         Calculate averaged action-angle variables for all orbits.
         
         This method uses :func:`galport.averager.action` to compute averaged
         actions, angles, and frequencies.
+
+        Parameters
+        ----------
+        parallel : bool, optional
+            If True, the calculation will be distributed across multiple CPU cores.
+            If False, it runs sequentially in a single process.
+            Default: False
+        n_jobs : int, optional
+            The number of parallel processes to spawn. If None, it defaults to 
+            the total number of available CPU cores.
+            Default: None
         """
+        current_os = platform.system()
+        if parallel and current_os == 'Windows':
+            if parallel and current_os == 'Windows':
+                warnings.warn(
+                    "Multiprocessing on Windows uses 'spawn' which duplicates memory. "
+                    "Switching to serial mode for stability. Run on Linux for full parallel performance.",
+                    UserWarning
+            )
+            parallel = False
+
         out_mask = np.zeros_like(self.t, dtype='bool')
         len_t = len(self.t)
         if self.reverse:
@@ -171,38 +232,48 @@ class OrbitTools():
 
         phi = self.Omega*self.t
 
-        for i in range(self.Norb):
-            xv_i = 1.*self.xv[i]
-            if sidereal:
-                x0 = 1.*xv_i[:, 0]
-                y0 = 1.*xv_i[:, 1]
-                xv_i[:, 0] = x0*np.cos(phi) - y0*np.sin(phi)
-                xv_i[:, 1] = x0*np.sin(phi) + y0*np.cos(phi)
-            
-            act = None if self.act is None else self.act[i]
-            data = averager.action(
-                t=self.t,
-                xv=xv_i,
-                act=act,
-                dJdt=dJdt,
-                secular=secular,
-                secular_extrema=secular_extrema,
-                secular_act_freq=secular_act_freq,
-                secular_bar_var=secular_bar_var,
-                border_type=border_type,
-                JR_ilr=JR_ilr,
-                positive_omega=positive_omega,
-                apply_apo_filter=apply_apo_filter,
-                freq_ratio_lim=freq_ratio_lim,
-                value_ratio_lim=value_ratio_lim,
-                spline_expansion=spline_expansion
+        data_all = None
+        
+        # Prepare a lazy generator for task arguments.
+        tasks = (
+            (
+                i, self.t, self.xv[i], 
+                None if self.act is None else self.act[i],
+                self.Omega, sidereal, dJdt, secular, secular_extrema,
+                secular_act_freq, secular_bar_var, border_type, JR_ilr,
+                positive_omega, apply_apo_filter, freq_ratio_lim,
+                value_ratio_lim, spline_expansion
             )
-            if (i == 0):
-                shape_data = np.shape(data[out_mask])
-                data_all = np.zeros((self.Norb, shape_data[0], shape_data[1]))
-                data_all[i] = data[out_mask, :]
+            for i in range(self.Norb)
+        )
 
-            data_all[i] = data[out_mask, :]
+        # 1. Serial execution mode
+        if not parallel or (n_jobs == 1):
+
+            for task_args in tasks:
+                i, data = OrbitTools._worker_action(task_args)
+
+                if data_all is None:
+                    shape_data = np.shape(data[out_mask])
+                    data_all = np.zeros((self.Norb, shape_data[0], shape_data[1]))
+
+                data_all[i] = data[out_mask, :]
+        # 2. Parallel execution mode
+        else:
+            if n_jobs is None:
+                n_jobs = mp.cpu_count()
+            n_jobs = min(n_jobs, self.Norb)
+            ch_size = max(1, self.Norb // (4 * n_jobs))
+
+            ctx = mp.get_context('fork')
+            with ctx.Pool(processes=n_jobs) as pool:
+                for i, data in pool.imap(OrbitTools._worker_action, tasks,
+                chunksize=ch_size):
+                    if data_all is None:
+                        shape_data = np.shape(data[out_mask])
+                        data_all = np.zeros((self.Norb, shape_data[0], shape_data[1]))
+                    
+                    data_all[i] = data[out_mask, :]
         
         self.angles = data_all[:, :, 6:9] if dJdt else data_all[:, :, 3:6]
         self.t_angles = self.t[out_mask]
@@ -216,7 +287,10 @@ class OrbitTools():
             time_resolution: Optional[float] = None,
             family: str = 'ILR',
             time_around_res: bool = False,
-            amplitude_res: bool = False):
+            amplitude_res: bool = False,
+            parallel: bool = False,
+            n_jobs: Optional[int] = None
+            ):
         """classify_orbits
 
         Parameters
@@ -235,6 +309,12 @@ class OrbitTools():
             if True function estimate the resonance entry and exit times for resonant orbits, by default False
         amplitude_res : bool, optional
             if True function estimate the maximum libration amplitude of the resonant angle, by default False
+        parallel : bool, optional
+            If True, enables parallel execution across the time snapshots (t_out).
+            Default: False
+        n_jobs : int, optional
+            The number of CPU processes to spawn for handling multiple time snapshots.
+            Default: None
 
         Returns
         -------
@@ -258,11 +338,53 @@ class OrbitTools():
         
         self.OC_result = self.OC(
             t_out=t_out, family=family, time_around_res=time_around_res,
-            amplitude_res=amplitude_res)
+            amplitude_res=amplitude_res, parallel=parallel, n_jobs=n_jobs)
 
         return self.OC_result
-            
-    def naif_frequency(self, fxy=False):
+
+    @staticmethod
+    def _worker_naif(args):
+        """
+        Static worker function for computing NAIF frequencies for a single orbit.
+        Receives pre-computed cos_phi and sin_phi to avoid redundant trigonometric calculations.
+        """
+        import naif
+        i, xv_i, t, cos_phi, sin_phi, fxy = args
+    
+        # Transform coordinates to the sidereal frame using pre-computed arrays
+        x = xv_i[:, 0] * cos_phi - xv_i[:, 1] * sin_phi
+        y = xv_i[:, 0] * sin_phi + xv_i[:, 1] * cos_phi
+        z = xv_i[:, 2]
+        
+        R = np.sqrt(x**2 + y**2)
+        f_R = R
+        freq_R, _ = naif.find_peak_freqs(f_R, t, verbose=False)
+        
+        vx = xv_i[:, 3]
+        vy = xv_i[:, 4]
+        vz = xv_i[:, 5]
+        
+        f_z = z + 1.j * vz
+        freq_z, _ = naif.find_peak_freqs(f_z, t, verbose=False)
+        
+        phi = np.arctan2(y, x)
+        Lz = (x*vy - y*vx)
+        f_phi = np.sqrt(2.*np.abs(Lz))*(np.cos(phi) + 1j*np.sin(phi))
+        freq_phi, _ = naif.find_peak_freqs(f_phi, t)
+        
+        if fxy:
+            freq_x, _ = naif.find_peak_freqs(x, t, verbose=False)
+            freq_y, _ = naif.find_peak_freqs(y, t, verbose=False)
+            return i, np.array([freq_R, freq_z, freq_phi, freq_x, freq_y])
+        
+        return i, np.array([freq_R, freq_z, freq_phi])
+ 
+    def naif_frequency(
+            self, 
+            fxy: bool = False,
+            parallel: bool = False,       
+            n_jobs: Optional[int] = None
+            ):
         """
 
         Calculate orbital frequencies using the NAIF package.
@@ -275,6 +397,12 @@ class OrbitTools():
         fxy : bool, optional
             If True, also calculate frequencies in x and y coordinates separately.
             Default: False
+        parallel : bool, optional
+            If True, enables parallel execution across the orbits.
+            Default: False
+        n_jobs : int, optional
+            The number of CPU processes to spawn. If None, defaults to all available cores.
+            Default: None
 
         Returns
         -------
@@ -284,35 +412,50 @@ class OrbitTools():
             - If fxy=False: [fR, fz, fφ]
             - If fxy=True:  [fR, fz, fφ, fx, fy]
         """
+        try:
+            import naif
+        except ImportError:
+            raise ImportError(
+                "The 'naif' package is required for this method but is not installed. "
+                "Please ensure it is available in your Python environment."
+            )
+
+        n_freqs = 5 if fxy else 3
+        freq_naif = np.zeros((self.Norb, n_freqs))
         
-        if fxy:
-            freq_naif = np.zeros((self.Norb, 5))
+        phi = self.Omega * self.t
+        cos_phi = np.cos(phi)
+        sin_phi = np.sin(phi)
+
+        if parallel and platform.system() == 'Windows':
+            warnings.warn(
+                "Multiprocessing on Windows uses 'spawn' which duplicates memory. "
+                "Switching to serial mode for stability.", UserWarning
+            )
+            parallel = False
+
+        # Lazy generator for tasks
+        tasks = (
+            (i, self.xv[i], self.t, cos_phi, sin_phi, fxy)
+            for i in range(self.Norb)
+        )
+
+        if not parallel or (n_jobs == 1):
+            for task_args in tasks:
+                i, res = OrbitTools._worker_naif(task_args)
+                freq_naif[i] = res
+
+        # 2. Parallel execution mode
         else:
-            freq_naif = np.zeros((self.Norb, 3))
-        
-        for i in range(self.Norb):
-            phi = self.Omega*self.t
-            x = self.xv[i, :, 0]*np.cos(phi) - self.xv[i, :, 1]*np.sin(phi)
-            y = self.xv[i, :, 0]*np.sin(phi) + self.xv[i, :, 1]*np.cos(phi)
-            z = self.xv[i, :, 2]
-            vx = self.xv[i, :, 3]
-            vy = self.xv[i, :, 4] 
-            vz = self.xv[i, :, 5]
-            
-            R = (x**2 + y**2)**0.5
-            f_R = R
-            freq_naif[i, 0], A = naif.find_peak_freqs(f_R, self.t)
-            f_z = z + 1.j*vz
-            freq_naif[i, 1], A = naif.find_peak_freqs(f_z, self.t)
+            if n_jobs is None:
+                n_jobs = mp.cpu_count()
+            n_jobs = min(n_jobs, self.Norb)
+            ch_size = max(1, self.Norb // (2 * n_jobs))
 
-            phi = np.arctan2(y, x)
-            Lz = (x*vy - y*vx)
-            f_phi = np.sqrt(2.*np.abs(Lz))*(np.cos(phi) + 1j*np.sin(phi))
-            freq_naif[i, 2], A = naif.find_peak_freqs(f_phi, self.t)
-            freq_naif[i, 2] = freq_naif[i, 2]
-
-            if fxy:
-                freq_naif[i, 3], A = naif.find_peak_freqs(x, self.t)
-                freq_naif[i, 4], A = naif.find_peak_freqs(y, self.t)
+            ctx = mp.get_context('fork')
+            with ctx.Pool(processes=n_jobs) as pool:
+                for i, res in pool.imap(OrbitTools._worker_naif, tasks,
+                chunksize=ch_size):
+                    freq_naif[i] = res
 
         return freq_naif

@@ -5,6 +5,9 @@
 import numpy as np
 from typing import Optional, Union
 
+import multiprocessing as mp
+import platform
+import warnings
 
 def classify_resonance(t, t0, angles):
     """Classify resonant orbits"""
@@ -361,11 +364,26 @@ class OrbitClassifier():
         if (self.n_ang == 1 and np.ndim(self.angles) == 2):
             self.angles = np.array([self.angles])
 
+    @staticmethod
+    def _worker_classify(args):
+        """
+        Static worker for a single time snapshot.
+        Processes all orbits for a specific t_out_one.
+        """
+        t_array, t_out_one, angle_res = args
+        res_type_1, amplitude_1, time_around_1 = classify_resonance(
+            t_array, t_out_one, angle_res)
+        return res_type_1, amplitude_1, time_around_1
+
+
     def __call__(self,
                  t_out: Union[np.ndarray, float],
                  family: str = 'ILR',
                  time_around_res: bool = False,
-                 amplitude_res: bool = False):
+                 amplitude_res: bool = False,
+                 parallel: bool = False,
+                 n_jobs: Optional[int] = None
+                 ):
         """
         Find resonant type
 
@@ -388,6 +406,13 @@ class OrbitClassifier():
             if True function estimate the resonance entry and exit times for resonant orbits, by default False
         amplitude_res : bool, optional
             if True function estimate the maximum libration amplitude of the resonant angle, by default False
+        parallel : bool, optional
+            If True, the classification loop will be parallelized across the time snapshots (t_out).
+            If False, processing runs sequentially.
+            Default: False
+        n_jobs : int, optional
+            The number of parallel workers. If None, it defaults to the total number of available CPU cores.
+            Default: None
 
         Returns
         -------
@@ -401,6 +426,7 @@ class OrbitClassifier():
             or began/end to pass through it.
         """
         
+        # Define angle_res
         if (np.ndim(self.angles) == 3):
             if family in ['ILR', 'ilr']:
                 angle_res = 2*self.angles[:, :, 2] - self.angles[:, :, 0] -\
@@ -412,7 +438,6 @@ class OrbitClassifier():
                 angle_res = 2*self.angles[:, :, 2] - 2*self.theta_p + np.pi
             elif family in ['vILR', 'vilr']:
                 angle_res = self.angles[:, :, 1] - self.angles[:, :, 0]
-
             else:
                 raise ValueError('Not such family')
         else:
@@ -420,30 +445,65 @@ class OrbitClassifier():
 
         t_out = np.atleast_1d(t_out)
         len_tout = np.shape(t_out)[0]
-        
         n_ang = 1 if np.ndim(angle_res) == 1 else len(angle_res)
 
+        # Safety check for Windows OS
+        if parallel and platform.system() == 'Windows' and len_tout > 1:
+            warnings.warn(
+                "Multiprocessing on Windows duplicates memory due to 'spawn'. "
+                "Switching to serial mode for stability.", UserWarning
+            )
+            parallel = False
+
         res_type = np.zeros((len_tout, n_ang), dtype='int')
-        if amplitude_res:
-            amplitude = np.zeros((len_tout, n_ang))
-        if time_around_res:
-            time_around = np.zeros((len_tout, n_ang, 2))
+        amplitude = np.zeros((len_tout, n_ang)) \
+            if amplitude_res else None
+        time_around = np.zeros((len_tout, n_ang, 2)) \
+            if time_around_res else None
 
-        for i, t_out_one in enumerate(t_out):
 
-            res_type_1, amplitude_1, time_around_1 = \
-                classify_resonance(self.t, t_out_one, angle_res)
-            
-            res_type[i] = np.copy(res_type_1)
-            if amplitude_res:
-                amplitude[i] = np.copy(amplitude_1)
-            if time_around_res:
-                time_around[i] = np.copy(time_around_1)
+        # Lazy generator for tasks
+        tasks = (
+            (self.t, t_out_one, angle_res)
+            for t_out_one in t_out
+        )
+
+        # 1. Serial mode (or if there is only 1 time snapshot)
+        if not parallel or n_jobs == 1 or len_tout == 1:
+            for i, task_args in enumerate(tasks):
+                res_type_1, amplitude_1, time_around_1 = \
+                    OrbitClassifier._worker_classify(task_args)
+                res_type[i] = res_type_1
+                if amplitude_res:
+                    amplitude[i] = amplitude_1
+                if time_around_res:
+                    time_around[i] = time_around_1
+        # 2. Parallel mode across time snapshots
+        else:
+            if n_jobs is None:
+                n_jobs = mp.cpu_count()
+            n_jobs = min(n_jobs, len_tout)
+            ch_size = max(1, len_tout // (2 * n_jobs))
+
+            ctx = mp.get_context('fork')
+            with ctx.Pool(processes=n_jobs) as pool:
+                # We use imap, which preserves the original order of t_out snapshots
+                for i, (res_type_1, amplitude_1, time_around_1) in enumerate(
+                    pool.imap(OrbitClassifier._worker_classify, tasks,
+                    chunksize=ch_size)
+                ):
+                    res_type[i] = res_type_1
+                    if amplitude_res:
+                        amplitude[i] = amplitude_1
+                    if time_around_res:
+                        time_around[i] = time_around_1
 
         if len_tout == 1:
-            res_type = res_type_1
-            amplitude = amplitude_1
-            time_around = time_around_1
+            res_type = res_type[0]
+            if amplitude_res:
+                amplitude = amplitude[0]
+            if time_around_res:
+                time_around = time_around[0]
         
         if amplitude_res and time_around_res:
             return res_type, amplitude, time_around

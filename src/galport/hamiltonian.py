@@ -448,23 +448,20 @@ class Hamiltonian():
         fix_point: dict
             J, theta, type(stable, unstable), H, librating time
         """
+        n_side = int(np.sqrt(Nstart))
+        J_grid = np.logspace(np.log10(J_range[0]), np.log10(J_range[1]), n_side)
+        theta_grid = np.linspace(0.0, 2*np.pi, n_side, endpoint=False)
 
-        J0 = np.random.random(Nstart)*(J_range[1] - J_range[0]) + \
-            J_range[0]
-        theta0 = np.random.random(Nstart)*2*np.pi
-        
-        x0_tab = np.zeros((Nstart, 2))
-        x0_tab[:, 0] = J0
-        x0_tab[:, 1] = theta0         
+        J0, theta0 = np.meshgrid(J_grid, theta_grid)
+        x0_tab = np.column_stack((J0.ravel(), theta0.ravel()))  
 
-        J_fix = np.zeros_like(J0)*np.nan
-        theta_fix = np.zeros_like(J0)*np.nan
+        n_tasks = len(x0_tab)
+        J_fix = np.zeros(n_tasks) * np.nan
+        theta_fix = np.zeros(n_tasks) * np.nan
 
         # Find derivative
         def derivative_for_root(x):
-            J = x[0]
-            theta = x[1]
-            dJdt, dthetadt = self.derivative(J, theta, t=t)
+            dJdt, dthetadt = self.derivative(x[0], x[1], t=t)
             return np.hstack((dJdt, dthetadt))
 
         # Solve Nstart equations
@@ -475,29 +472,40 @@ class Hamiltonian():
                 theta_fix[i] = res.x[1] % (2*np.pi)
 
         # Delete not success solution
-        J_fix = np.delete(J_fix, np.isnan(J_fix))
-        theta_fix = np.delete(theta_fix, np.isnan(theta_fix))
+        nan_mask = np.isnan(J_fix)
+        J_fix = np.delete(J_fix, nan_mask)
+        theta_fix = np.delete(theta_fix, nan_mask)
+
+        keep_mask = np.ones_like(J_fix, dtype=bool)
 
         # Delete repeated roots
-        i = 0
-        while True:
-            rtol = ((J_fix[i] - J_fix)**2 + 
-                ((theta_fix[i] - theta_fix + np.pi) % (2*np.pi)-np.pi)**2)**0.5
+        n_points = len(J_fix)
+        for i in range(n_points):
+            if not keep_mask[i]:
+                continue
 
-            mask = (rtol < tol)
-            mask[i] = False
-        
-            J_fix = np.delete(J_fix, mask)
-            theta_fix = np.delete(theta_fix, mask)
+            dtheta = (theta_fix - theta_fix[i] + np.pi) % (2 * np.pi) - np.pi
+            dJ = J_fix - J_fix[i]
+            distances = np.sqrt(dJ**2 + dtheta**2)
             
-            i += 1
-            if i >= len(J_fix):
-                break
+            duplicate_mask = distances < tol
+            duplicate_mask[i] = False
+            keep_mask[duplicate_mask] = False
+
+        J_fix = J_fix[keep_mask]
+        theta_fix = theta_fix[keep_mask]
+
+        if len(J_fix) == 0:
+            return {'J': np.array([]),
+                    'theta': np.array([]),
+                    'stable': np.array([]),
+                    'T_lib': np.array([]),
+                    'H': np.array([])}
 
         d2HdJ2, d2Hdtheta2, d2HdJdtheta = self.jacobian(J_fix, theta_fix, t=t)
-        det_jac = (d2HdJdtheta**2 - d2HdJ2*d2Hdtheta2)
-        stable = det_jac < 0
-        T_libration = 2*np.pi / np.sqrt(-det_jac)
+        det_jac = (d2HdJ2*d2Hdtheta2 - d2HdJdtheta**2)
+        stable = det_jac > 0
+        T_libration = 2*np.pi / np.sqrt(det_jac)
 
         H_fix = self.hamiltonian(J_fix, theta_fix, t=t)
 
