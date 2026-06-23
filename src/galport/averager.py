@@ -722,27 +722,42 @@ def value(
         x_max = np.interp(t, t_edges_max, xn_max_spline)
         x_min = np.interp(t, t_edges_min, xn_min_spline)
         x_all = np.column_stack((x_mean*nanmask, x_min*nanmask,
-                                x_max*nanmask))
+                                 x_max*nanmask))
 
     if not frequency:
         return x_all
 
     # Calculate frequencies and angles
-    freq_x_min = _calculate_frequency_and_angle(
-        t_spline, n_min_spline, t, 'apocenters', angle=angle)
-    freq_x_max = _calculate_frequency_and_angle(
-        t_spline, n_max_spline, t, 'apocenters', angle=angle)
+    if (len(n_min_spline) < 3) or (len(n_max_spline) < 3):
+        return np.zeros((len(t), n_var))*np.nan
+    
+    delta_angle = np.pi if (n_max_spline[0] < n_min_spline[0]) else -np.pi
+    if average_type == 'mean':    
+        freq_x_min = _calculate_frequency_and_angle(
+            t_spline, n_min_spline, t, 'apocenters', angle=angle)
+        freq_x_max = _calculate_frequency_and_angle(
+            t_spline, n_max_spline, t, 'apocenters', angle=angle)
+    
+        if angle:
+            freq_x = (freq_x_max[0] + freq_x_min[0]) / 2.
+            angle_x = (freq_x_max[1] + freq_x_min[1] + delta_angle) / 2.
+            return np.column_stack((x_all, freq_x*nanmask, angle_x*nanmask))
 
-    if angle:
-        freq_x = (freq_x_max[0] + freq_x_min[0]) / 2.
-        angle_x = (freq_x_max[1] + freq_x_min[1]) / 2.
-        return np.column_stack((x_all, freq_x*nanmask, angle_x*nanmask))
+        freq_x = (freq_x_min + freq_x_max) / 2.
+        return np.column_stack((x_all, freq_x*nanmask))
+    if average_type == 'extrema':
+        freq_x = _calculate_frequency_and_angle(
+            t_spline, n_spline, t, 'apocenters', angle=angle)
+        if angle:
+            freq_x0 = freq_x[0] / 2
+            (n_max_spline[0] > n_min_spline[0])
+            angle_x0 = (freq_x[1] + delta_angle) / 2 
+            return np.column_stack((x_all, freq_x0*nanmask, angle_x0*nanmask))
+        
+        return np.column_stack((x_all, freq_x*nanmask / 2))
+        
 
-    freq_x = (freq_x_min + freq_x_max) / 2.
-    return np.column_stack((x_all, freq_x*nanmask))
-
-
-def action_sph(
+def _action_sph(
     t: np.ndarray,
     xv: np.ndarray,
     dJdt: bool = False,

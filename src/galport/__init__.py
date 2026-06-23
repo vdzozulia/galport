@@ -4,6 +4,8 @@ galport (The GALactic phase-space PORTrate investigator)
 Package for investigation galactic models in the action-angler space.
 
 galport 0.1.3 - Initial stable version 13.04.2026
+galport 0.1.4 - Add parallel calculation 16.06.2026
+
 """
 
 from . import averager
