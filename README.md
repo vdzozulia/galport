@@ -59,4 +59,4 @@ Full documentation is available at [galport.readthedocs.io](https://galport.read
 ## Citation
 If you use galport in your scientific research, please cite the following work:
 
-Zozulia, Viktor, GalPort: Investigation of the bar in action-angle space. Available at SSRN: https://ssrn.com/abstract=6560839 or http://dx.doi.org/10.2139/ssrn.6560839
+Zozulia, Viktor, GalPort: Investigation of the bar in action-angle space. The paper is available at the link: https://www.sciencedirect.com/science/article/abs/pii/S2213133726001058. DOI [10.1016/j.ascom.2026.101163](https://doi.org/10.1016/j.ascom.2026.101163)
